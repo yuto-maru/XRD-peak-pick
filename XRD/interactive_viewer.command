@@ -1,4 +1,4 @@
 cd desktop
 cd XRD
 cd tiff_analysis
-python interactive_viewer.py
+python3 interactive_viewer.py
