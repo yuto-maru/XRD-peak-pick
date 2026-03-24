@@ -45,15 +45,30 @@ def process_image():
     data = img_array.copy()
 
     if use_log:
-        data = np.log10(data + 1)
+        # ★ 負値・ゼロ対策（超重要）
+        data = np.clip(data, 0, None)
+
+        # ★ 安全なオフセット
+        offset = np.percentile(data[data > 0], 1) if np.any(data > 0) else 1
+
+        data = np.log10(data + offset)
 
     vmin = np.percentile(data, slider_low.val)
     vmax = np.percentile(data, slider_high.val)
 
-    if vmax == vmin:
-        vmax += 1e-6
+    # ★ NaN対策
+    if not np.isfinite(vmin):
+        vmin = np.nanmin(data)
+    if not np.isfinite(vmax):
+        vmax = np.nanmax(data)
 
-    return np.clip((data - vmin) / (vmax - vmin), 0, 1)
+    if vmax <= vmin:
+        vmax = vmin + 1e-6
+
+    result = (data - vmin) / (vmax - vmin)
+    result = np.clip(result, 0, 1)
+
+    return result
 
 # ----- 初期表示 -----
 im = ax.imshow(process_image(), vmin=0, vmax=1)
