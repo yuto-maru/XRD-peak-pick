@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 import subprocess
+import pyperclip
 
 
 # === Load data (.chi) ===
@@ -173,7 +174,7 @@ def main():
 
                 text_block = "\n".join(output_lines)
 
-                subprocess.run("pbcopy", text=True, input=text_block)
+                pyperclip.copy(text_block)
 
                 print("\nCopied:\n")
                 print(text_block)
