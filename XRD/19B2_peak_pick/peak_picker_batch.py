@@ -7,9 +7,12 @@ import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 import subprocess
 import pyperclip
+from matplotlib.widgets import Button, TextBox
 
 
 # === Load data ===
+# .dat版の読み込み条件は維持：skiprows=24, tab区切り, Q/Intensity/Error の3列
+
 def load_data(filepath, skip_rows=24):
     data = pd.read_csv(filepath, skiprows=skip_rows, sep="\t", header=None)
     data.columns = ['Q', 'Intensity', 'Error']
@@ -48,10 +51,14 @@ def main():
     ref_file = ref_files[0]
     print(f"\nReference: {ref_file}")
 
-    # === Input ONCE (apply to all files) ===
-    scale = float(input("Reference scale factor (default=1): ") or 1)
-    height = float(input("Min peak height (default=15): ") or 15)
-    distance = int(input("Peak distance (default=5): ") or 5)
+    # === Settings inherited by next file ===
+    # Applyを押した時点の値が、この辞書に保存される。
+    # 次のファイルでは、この値がTextBoxの初期値になる。
+    settings = {
+        "scale": 1.0,
+        "height": 15.0,
+        "distance": 5,
+    }
 
     ref_data = load_data(os.path.join(ref_dir, ref_file))
 
@@ -59,7 +66,8 @@ def main():
         "Click index: Select / Deselect\n"
         "Press C: Copy selected peaks\n"
         "Press Q: Next file\n"
-        "Press Z: Zoom to rectangle (toggle)"
+        "Press Z: Zoom to rectangle (toggle)\n"
+        "Edit Scale / Height / Distance, then Apply: Re-detect peaks"
     )
 
     print("\n=== Instructions ===")
@@ -76,49 +84,148 @@ def main():
             print("Length mismatch. Skipping.")
             continue
 
-        diff_intensity = sample_data['Intensity'] - scale * ref_data['Intensity']
-
-        peaks, _ = detect_peaks(diff_intensity, height, distance)
-
-        if len(peaks) == 0:
-            print("No peaks detected.")
-            continue
-
-        # === Plot ===
-        fig, ax = plt.subplots(figsize=(10, 6))
-
-        ax.plot(sample_data['Q'], diff_intensity)
-        ax.plot(sample_data['Q'].iloc[peaks],
-                diff_intensity.iloc[peaks],
-                'ro')
-
-        ax.set_title(sample_file)
-        ax.set_xlabel("Q")
-        ax.set_ylabel("Sample - scale*Ref")
-        ax.grid(True)
+        # === State for current file ===
+        state = {
+            "scale": settings["scale"],
+            "height": settings["height"],
+            "distance": settings["distance"],
+            "diff_intensity": None,
+            "peaks": np.array([], dtype=int),
+        }
 
         selected = set()
         text_objects = {}
+        plotted_artists = []
 
-        # === Display GLOBAL index ===
-        for idx in peaks:
-            q = sample_data['Q'].iloc[idx]
-            y = diff_intensity.iloc[idx]
+        # === Plot ===
+        fig, ax = plt.subplots(figsize=(11, 7))
+        plt.subplots_adjust(bottom=0.22, top=0.82)
 
-            txt = ax.text(q, y, str(idx),
-                          color='blue',
-                          fontsize=9,
-                          picker=True)
-
-            text_objects[txt] = idx
-
-        # === KEY instruction (OUTSIDE PLOT) ===
         fig.text(
             0.01, 0.98,
             instruction_text,
             fontsize=10,
             verticalalignment='top'
         )
+
+        # TextBox / Button area
+
+        ax_scale_label = plt.axes([0.05, 0.12, 0.22, 0.03])
+        ax_scale_label.axis("off")
+        ax_scale_label.text(0.0, 0.5, "Reference scale factor", fontsize=10, va="center")
+
+        ax_scale = plt.axes([0.05, 0.07, 0.22, 0.045])
+        scale_box = TextBox(ax_scale, "", initial=str(state["scale"]))
+
+        ax_height_label = plt.axes([0.33, 0.12, 0.22, 0.03])
+        ax_height_label.axis("off")
+        ax_height_label.text(0.0, 0.5, "Min peak height", fontsize=10, va="center")
+
+        ax_height = plt.axes([0.33, 0.07, 0.22, 0.045])
+        height_box = TextBox(ax_height, "", initial=str(state["height"]))
+
+        ax_distance_label = plt.axes([0.61, 0.12, 0.22, 0.03])
+        ax_distance_label.axis("off")
+        ax_distance_label.text(0.0, 0.5, "Peak distance", fontsize=10, va="center")
+
+        ax_distance = plt.axes([0.61, 0.07, 0.22, 0.045])
+        distance_box = TextBox(ax_distance, "", initial=str(state["distance"]))
+
+        ax_apply = plt.axes([0.86, 0.07, 0.10, 0.045])
+        apply_button = Button(ax_apply, "Apply")
+
+        def calculate_current_diff_and_peaks():
+            state["diff_intensity"] = sample_data['Intensity'] - state["scale"] * ref_data['Intensity']
+            state["peaks"], _ = detect_peaks(
+                state["diff_intensity"],
+                state["height"],
+                state["distance"]
+            )
+
+        def draw_plot():
+            ax.clear()
+            selected.clear()
+            text_objects.clear()
+            plotted_artists.clear()
+
+            diff_intensity = state["diff_intensity"]
+            peaks = state["peaks"]
+
+            ax.plot(sample_data['Q'], diff_intensity)
+
+            if len(peaks) > 0:
+                ax.plot(sample_data['Q'].iloc[peaks],
+                        diff_intensity.iloc[peaks],
+                        'ro')
+
+                # === Display GLOBAL index ===
+                for idx in peaks:
+                    q = sample_data['Q'].iloc[idx]
+                    y = diff_intensity.iloc[idx]
+
+                    txt = ax.text(q, y, str(idx),
+                                  color='blue',
+                                  fontsize=9,
+                                  picker=True)
+                    text_objects[txt] = idx
+            else:
+                ax.text(
+                    0.5, 0.95,
+                    "No peaks detected. Change Height / Distance and Apply.",
+                    transform=ax.transAxes,
+                    ha="center",
+                    va="top",
+                    fontsize=10
+                )
+
+            ax.set_title(
+                f"{sample_file}    scale={state['scale']}  height={state['height']}  distance={state['distance']}"
+            )
+            ax.set_xlabel("Q")
+            ax.set_ylabel("Sample - scale*Ref")
+            ax.grid(True)
+            fig.canvas.draw_idle()
+
+        def apply_settings(event=None):
+            try:
+                new_scale = float(scale_box.text)
+                new_height = float(height_box.text)
+                new_distance = int(float(distance_box.text))
+
+                if new_distance < 1:
+                    raise ValueError("Distance must be >= 1")
+
+            except Exception as e:
+                print(f"Invalid setting: {e}")
+                return
+
+            state["scale"] = new_scale
+            state["height"] = new_height
+            state["distance"] = new_distance
+
+            # 次ファイルへ引き継ぐ
+            settings["scale"] = new_scale
+            settings["height"] = new_height
+            settings["distance"] = new_distance
+
+            calculate_current_diff_and_peaks()
+            draw_plot()
+
+            print(
+                f"Applied: scale={new_scale}, height={new_height}, "
+                f"distance={new_distance}, peaks={len(state['peaks'])}"
+            )
+
+        # Initial detection with inherited settings
+        calculate_current_diff_and_peaks()
+        draw_plot()
+
+        apply_button.on_clicked(apply_settings)
+
+        # Press Enter in any TextBox to apply/re-detect
+        scale_box.on_submit(apply_settings)
+        height_box.on_submit(apply_settings)
+        distance_box.on_submit(apply_settings)
 
         # === Mouse click ===
         def on_pick(event):
@@ -142,6 +249,9 @@ def main():
         # === Keyboard ===
         def on_key(event):
 
+            if event.key is None:
+                return
+
             # COPY selected peaks
             if event.key.lower() == "c":
 
@@ -150,6 +260,8 @@ def main():
                     return
 
                 selected_sorted = sorted(selected)
+                diff_intensity = state["diff_intensity"]
+                scale_now = state["scale"]
 
                 output_lines = []
 
@@ -157,7 +269,7 @@ def main():
 
                     col0 = idx
                     col1 = sample_data['Q'].iloc[idx]
-                    col2 = scale * ref_data['Intensity'].iloc[idx]
+                    col2 = scale_now * ref_data['Intensity'].iloc[idx]
                     col3 = sample_data['Intensity'].iloc[idx]
                     col4 = diff_intensity.iloc[idx]
                     col5 = col4
@@ -178,6 +290,8 @@ def main():
 
             # NEXT file
             elif event.key.lower() == "q":
+                # qで進んだ場合も、現在TextBoxに入っている値を次へ引き継ぐ
+                apply_settings()
                 plt.close(fig)
 
             # ZOOM TO RECTANGLE (toggle)
