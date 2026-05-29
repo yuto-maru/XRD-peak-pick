@@ -116,15 +116,29 @@ def main():
         )
 
         # === TextBox / Button area ===
-        ax_scale = plt.axes([0.08, 0.11, 0.18, 0.045])
-        ax_height = plt.axes([0.34, 0.11, 0.18, 0.045])
-        ax_distance = plt.axes([0.60, 0.11, 0.18, 0.045])
-        ax_apply = plt.axes([0.82, 0.11, 0.12, 0.045])
+        ax_scale_label = plt.axes([0.05, 0.12, 0.22, 0.03])
+        ax_scale_label.axis("off")
+        ax_scale_label.text(0.0, 0.5, "Reference scale factor", fontsize=10, va="center")
 
-        box_scale = TextBox(ax_scale, "Ref scale ", initial=str(params["scale"]))
-        box_height = TextBox(ax_height, "Min height ", initial=str(params["height"]))
-        box_distance = TextBox(ax_distance, "Distance ", initial=str(params["distance"]))
-        btn_apply = Button(ax_apply, "Apply")
+        ax_scale = plt.axes([0.05, 0.07, 0.22, 0.045])
+        scale_box = TextBox(ax_scale, "", initial=str(params["scale"]))
+
+        ax_height_label = plt.axes([0.33, 0.12, 0.22, 0.03])
+        ax_height_label.axis("off")
+        ax_height_label.text(0.0, 0.5, "Min peak height", fontsize=10, va="center")
+
+        ax_height = plt.axes([0.33, 0.07, 0.22, 0.045])
+        height_box = TextBox(ax_height, "", initial=str(params["height"]))
+
+        ax_distance_label = plt.axes([0.61, 0.12, 0.22, 0.03])
+        ax_distance_label.axis("off")
+        ax_distance_label.text(0.0, 0.5, "Peak distance", fontsize=10, va="center")
+
+        ax_distance = plt.axes([0.61, 0.07, 0.22, 0.045])
+        distance_box = TextBox(ax_distance, "", initial=str(params["distance"]))
+
+        ax_apply = plt.axes([0.86, 0.07, 0.10, 0.045])
+        apply_button = Button(ax_apply, "Apply")
 
         def recalculate_and_redraw(reset_view=False):
             """Recalculate diff and peaks, then redraw peak markers/text."""
@@ -192,9 +206,9 @@ def main():
 
         def apply_settings(event=None):
             try:
-                new_scale = float(box_scale.text.strip() or params["scale"])
-                new_height = float(box_height.text.strip() or params["height"])
-                new_distance = int(float(box_distance.text.strip() or params["distance"]))
+                new_scale = float(scale_box.text.strip() or params["scale"])
+                new_height = float(height_box.text.strip() or params["height"])
+                new_distance = int(float(distance_box.text.strip() or params["distance"]))
 
                 if new_distance < 1:
                     print("Peak distance must be >= 1.")
@@ -219,12 +233,12 @@ def main():
             except ValueError:
                 print("Invalid input. Use numbers: scale=float, height=float, distance=integer.")
 
-        btn_apply.on_clicked(apply_settings)
+        apply_button.on_clicked(apply_settings)
 
         # Enter in a TextBox also applies settings
-        box_scale.on_submit(apply_settings)
-        box_height.on_submit(apply_settings)
-        box_distance.on_submit(apply_settings)
+        scale_box.on_submit(apply_settings)
+        height_box.on_submit(apply_settings)
+        distance_box.on_submit(apply_settings)
 
         # === Mouse click (select / deselect) ===
         def on_pick(event):
@@ -290,9 +304,9 @@ def main():
             elif event.key and event.key.lower() == "q":
                 # Qで次のファイルへ進む前に、入力欄の値を次回用に保存する
                 try:
-                    current_params["scale"] = float(box_scale.text.strip() or params["scale"])
-                    current_params["height"] = float(box_height.text.strip() or params["height"])
-                    current_params["distance"] = int(float(box_distance.text.strip() or params["distance"]))
+                    current_params["scale"] = float(scale_box.text.strip() or params["scale"])
+                    current_params["height"] = float(height_box.text.strip() or params["height"])
+                    current_params["distance"] = int(float(distance_box.text.strip() or params["distance"]))
                 except ValueError:
                     print("Invalid input. Keeping previous settings for next file.")
                 plt.close(fig)
